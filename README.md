@@ -6,6 +6,12 @@ Keluarannya kartu teks siap kirim ke Telegram/Discord, atau JSON.
 
 Tanpa dependensi npm — cukup Node.js ≥ 20 (pakai `fetch` bawaan).
 
+**Mau mengembangkan atau menyuruh agen mengubahnya?** Mulai dari [CLAUDE.md](CLAUDE.md) —
+aturan yang tidak boleh dilanggar, peta file, dan resep perubahan yang sering diminta.
+Detailnya: [docs/architecture.md](docs/architecture.md) (alur dan struktur),
+[docs/gmgn-api.md](docs/gmgn-api.md) (endpoint, field, rate limit),
+[docs/decisions.md](docs/decisions.md) (kenapa dibuat begini).
+
 ## 1. API key
 
 Lewat gmgn-cli (butuh public key Ed25519, dibuatkan otomatis):
@@ -43,7 +49,7 @@ node src/cli.js --watch 60               # scan tiap 60 detik
 
 Chain yang didukung: `sol` `bsc` `eth` `base` `arbitrum` `hyperevm` `robinhood` `arc` `stable`.
 Default hanya `sol` — isi `--chain` atau `chains` di config untuk memantau lebih dari satu.
-Tiap chain adalah satu request terpisah, discan berurutan dengan jeda 300 ms.
+Tiap chain adalah satu request terpisah, discan berurutan dengan jeda `--pace` (default 1000 ms).
 
 ## 2a. Di mana filter diatur
 
