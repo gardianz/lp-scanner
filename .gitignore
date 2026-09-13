@@ -1,0 +1,12 @@
+node_modules/
+
+# Kredensial — jangan pernah di-commit
+.env
+
+# State runtime + setelan pribadi
+state.json
+state.json.tmp
+config.json
+
+# Setelan editor/agent lokal
+.claude/

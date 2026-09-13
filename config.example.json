@@ -1,0 +1,31 @@
+{
+  "chains": ["sol", "bsc", "base", "eth", "robinhood"],
+  "interval": "5m",
+  "sort": "turnover",
+  "limit": 100,
+  "top": 3,
+  "deep": true,
+  "watch": 60,
+  "confirm": 2,
+  "window": 3,
+  "cooldown": 30,
+  "stateFile": "state.json",
+  "lpSize": 2000,
+  "feeBps": 100,
+
+  "filters": {
+    "minVolume": 300000,
+    "minMcap": 100000,
+    "minLiquidity": 30000,
+    "minHolder": 200,
+    "minSwaps": 100,
+    "minTurnover": 2,
+
+    "maxRugRatio": 0.2,
+    "maxTop10Rate": 0.35,
+    "maxSniperHold": 0.15,
+    "maxDevHold": 0.1,
+
+    "maxAge": "48h"
+  }
+}

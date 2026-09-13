@@ -1,0 +1,13 @@
+{
+  "name": "lp-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scanner token berdasarkan volume interval pendek (default 5m) via GMGN OpenAPI",
+  "bin": { "lp-scanner": "src/cli.js" },
+  "scripts": {
+    "scan": "node src/cli.js",
+    "watch": "node src/cli.js --watch 60"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,37 @@
+[Unit]
+Description=lp-scanner — pemantau token volume 5m via GMGN
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/lp-scanner
+# Chain, interval, dan semua filter diatur di /etc/lp-scanner/config.json
+# (salin dari config.example.json). Kartu dikirim ke Telegram/Discord;
+# journald cukup menyimpan baris ringkasan dan log.
+ExecStart=/usr/bin/node /opt/lp-scanner/src/cli.js --config /etc/lp-scanner/config.json
+
+# Key GMGN + kredensial notifikasi. File mode 600, milik User di atas.
+EnvironmentFile=/etc/lp-scanner/env
+
+Restart=always
+RestartSec=10
+# Jangan biarkan crash-loop cepat membakar jatah rate limit GMGN.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lp-scanner
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/lp-scanner
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
