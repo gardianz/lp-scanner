@@ -41,6 +41,7 @@ soal uang orang.
 | [src/format.js](src/format.js) | teks kartu dan ringkasan | keputusan lolos/tidak |
 | [src/notify.js](src/notify.js) | sink Telegram/Discord/stdout, potong pesan | pengambilan data |
 | [src/state.js](src/state.js) | state polling + cooldown yang tahan restart | |
+| [src/unipool.js](src/unipool.js) | jembatan ke bot LP: JSONL + daftar chain yang didukung | apa pun soal pool/wallet |
 | [src/cli.js](src/cli.js) | argumen, config, loop watch, backoff, shutdown | detail format/HTTP |
 
 Alur satu siklus: `cli` → `gmgn.rank()` → `screen.normalize()` → `filters.passesFilters()` →
@@ -82,6 +83,26 @@ Utamakan menguji lewat pintu itu.
 
 Belum ada test runner. Kalau menambahkannya, pakai `node --test` bawaan supaya proyek tetap
 tanpa dependensi.
+
+## Jembatan ke bot LP
+
+`--lp-inbox <path>` (atau env `LP_ALERT_INBOX`) menulis kandidat yang **sudah lolos
+gating kartu** — filter, konfirmasi polling, dan cooldown — ke file JSONL. Bot LP
+(unipool) membacanya, mencari pool, dan menghitung saran posisi sendiri.
+
+Empat aturan:
+
+1. **Gating dipakai bersama.** `buildOutput()` memilih `picked` sekali, lalu kartu DAN
+   jembatan memakai daftar yang sama. Kalau dipisah, bot LP akan menerima token yang
+   di sini sendiri dianggap belum layak dikirim.
+2. **Hanya `LP_CHAINS`** (`bsc` `base` `hyperevm` `robinhood`). Chain lain tetap dapat
+   kartu biasa; meneruskannya cuma menghasilkan notifikasi yang tidak bisa
+   ditindaklanjuti.
+3. **Angka GMGN diteruskan apa adanya**, `null` tetap `null`. Tidak ada turunan baru
+   yang dihitung di sini — aturan "jangan mengarang angka" berlaku sama di jembatan.
+4. **Satu baris JSON per kandidat**, ditulis `appendFileSync`. Di bawah 4 KB dan
+   dengan `O_APPEND`, satu `write()` tidak terpotong penulis lain di file biasa Linux.
+   Bot LP mengambilnya dengan `rename()` lalu mengosongkan.
 
 ## Kredensial
 

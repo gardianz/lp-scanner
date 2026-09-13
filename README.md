@@ -215,6 +215,34 @@ Unit-nya template (`@user`), jadi `%i` jadi nama user yang menjalankan. Sesuaika
   `top`, naikkan juga `--watch` supaya satu siklus selesai sebelum siklus berikutnya mulai.
 - **Log.** Baris ringkasan + status masuk journald; kartu detail pergi ke Telegram/Discord.
 
+## 5b. Menyambung ke bot LP (unipool)
+
+Kandidat yang **lolos saringan DAN lolos konfirmasi polling/cooldown** bisa diteruskan
+ke bot LP supaya ia langsung mencarikan pool dan menghitung saran posisi. Mint tetap
+manual di bot itu — tool ini tidak pernah menyentuh jalur transaksi.
+
+```bash
+node src/cli.js --watch 60 --lp-inbox ../lp-inbox.jsonl
+# atau lewat env, supaya file yang di-commit tidak perlu diubah:
+LP_ALERT_INBOX=/home/user/pool/unipool/lp-inbox.jsonl node src/cli.js --watch 60
+```
+
+Bot LP membacanya dengan `LP_ALERT_INBOX` yang menunjuk file yang sama.
+
+Tiga hal yang disengaja:
+
+- **File JSONL, bukan HTTP.** Dua proses bisa restart sendiri-sendiri; tidak perlu
+  port, tidak perlu token, dan tidak ada yang gagal kalau salah satunya sedang mati.
+  Bot LP mengambil isinya dengan `rename()` lalu mengosongkan, jadi satu kandidat
+  tidak pernah diproses dua kali.
+- **Hanya chain yang bisa di-LP**: `bsc`, `base`, `hyperevm`, `robinhood`. `sol`,
+  `eth`, `arbitrum`, `arc`, `stable` tetap dikirim sebagai kartu biasa tapi TIDAK
+  diteruskan — bot LP tidak mendukungnya, dan notifikasi yang tidak bisa
+  ditindaklanjuti cuma jadi kebisingan.
+- **Yang dikirim angka GMGN apa adanya**, bukan turunan baru. Saran posisi dihitung
+  bot LP dari data on-chain miliknya sendiri (TVL per-pool, APR, volatilitas pool),
+  karena hanya dia yang bisa memverifikasinya.
+
 ## 6. Struktur
 
 | File | Isi |
@@ -225,5 +253,6 @@ Unit-nya template (`@user`), jadi `%i` jadi nama user yang menjalankan. Sesuaika
 | [src/format.js](src/format.js) | kartu teks + ringkasan tabel + penanda salin |
 | [src/notify.js](src/notify.js) | sink stdout / Telegram / Discord, pemotongan pesan, retry 429 |
 | [src/state.js](src/state.js) | state polling + cooldown yang tahan restart |
+| [src/unipool.js](src/unipool.js) | jembatan ke bot LP: tulis kandidat lolos ke file JSONL |
 | [src/cli.js](src/cli.js) | parsing argumen, mode watch, backoff, shutdown bersih |
 | [deploy/lp-scanner.service](deploy/lp-scanner.service) | unit systemd template |

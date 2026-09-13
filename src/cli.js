@@ -7,6 +7,7 @@ import { normalize, mergeDeep, classify } from "./screen.js";
 import { FILTER_SPEC, FILTER_BY_CLI, toQuery, passesFilters, describeFilters } from "./filters.js";
 import { formatCard, formatSummary, usd } from "./format.js";
 import { buildSinks, deliver, log } from "./notify.js";
+import { emitLpCandidate, LP_CHAINS } from "./unipool.js";
 import { createPollState } from "./state.js";
 
 const DEEP_CAP = 20; // batas panggilan /v1/token/info per scan, jaga jatah rate limit
@@ -52,6 +53,9 @@ Jalan:
   --pace <ms>              jeda minimum antar request GMGN (default 1000)
   --state-file <path>      simpan state polling/cooldown (default ./state.json)
   --no-state               jangan simpan state ke disk
+  --lp-inbox <path>        teruskan kandidat ke bot LP lewat file JSONL ini
+                           (chain yang didukung: bsc, base, hyperevm, robinhood)
+  --no-lp-inbox            matikan penerusan ke bot LP
   --demo                   pakai demo key publik GMGN (read-only, rate limit ketat)
   --help
 
@@ -137,6 +141,9 @@ function parseArgs(argv) {
     ...fromConfig,
     filters: { ...DEFAULTS.filters, ...(fromConfig.filters ?? {}) },
     stateFile: fromConfig.stateFile === undefined ? "state.json" : fromConfig.stateFile,
+    // Jembatan ke bot LP. Env menang atas config supaya deploy systemd bisa
+    // menyalakannya tanpa mengubah file yang di-commit.
+    lpInbox: process.env.LP_ALERT_INBOX || fromConfig.lpInbox || null,
     configPath,
   };
 
@@ -182,6 +189,8 @@ function parseArgs(argv) {
       case "--pace": o.paceMs = flagNum(next(), "pace"); break;
       case "--state-file": o.stateFile = next(); break;
       case "--no-state": o.stateFile = null; break;
+      case "--lp-inbox": o.lpInbox = next(); break;
+      case "--no-lp-inbox": o.lpInbox = null; break;
       case "--stdout": o.stdout = true; break;
       case "--json": o.json = true; break;
       case "--demo": o.demo = true; break;
@@ -216,6 +225,16 @@ function parseArgs(argv) {
   // (systemd, cron, folder lain) tetap membaca dan menulis state yang sama.
   if (o.stateFile && !isAbsolute(o.stateFile)) {
     o.stateFile = resolve(new URL("..", import.meta.url).pathname, o.stateFile);
+  }
+  if (o.lpInbox && !isAbsolute(o.lpInbox)) {
+    o.lpInbox = resolve(new URL("..", import.meta.url).pathname, o.lpInbox);
+  }
+  if (o.lpInbox) {
+    const luar = o.chains.filter((c) => !LP_CHAINS.has(c));
+    if (luar.length) {
+      log("warn", `chain ${luar.join(", ")} tidak didukung bot LP — kandidatnya tetap `
+        + `dikirim sebagai kartu biasa, tapi tidak diteruskan (chain LP: ${[...LP_CHAINS].join(", ")})`);
+    }
   }
   if (o.lpSize !== null && o.feeBps === null) {
     log("warn", "--lp-size tanpa --fee-bps: hanya porsi pool yang dihitung, estimasi fee dilewati (fee_ratio GMGN unitnya tidak terdokumentasi)");
@@ -300,19 +319,29 @@ function buildOutput(chain, result, o, pollState) {
     };
   }
 
-  const cards = visible
+  // Kandidat yang benar-benar dikirim — gating konfirmasi polling + cooldown
+  // dipakai bersama oleh kartu dan jembatan ke bot LP, supaya bot LP tidak
+  // menerima token yang di sini sendiri dianggap belum layak dikirim.
+  const picked = visible
     .slice(0, o.top)
-    .filter((r) => pollState.shouldAlert(stateKey(r.token), o))
-    .map((r) => {
-      const card = formatCard(r.token, r.verdict, {
-        pollHits: pollState.hits(stateKey(r.token)),
-        pollWindow: o.window,
-        lp: lpProjection(r.token, o),
-      });
-      return r.token.deepError ? `${card}\n⚠ Detail --deep gagal diambil: ${r.token.deepError}` : card;
-    });
+    .filter((r) => pollState.shouldAlert(stateKey(r.token), o));
 
-  return { visible, json: null, summary: formatSummary(visible, { ...o, chain }), cards };
+  const cards = picked.map((r) => {
+    const card = formatCard(r.token, r.verdict, {
+      pollHits: pollState.hits(stateKey(r.token)),
+      pollWindow: o.window,
+      lp: lpProjection(r.token, o),
+    });
+    return r.token.deepError ? `${card}\n⚠ Detail --deep gagal diambil: ${r.token.deepError}` : card;
+  });
+
+  const emits = picked.map((r) => ({
+    token: r.token,
+    verdict: r.verdict,
+    meta: { pollHits: pollState.hits(stateKey(r.token)), pollWindow: o.window },
+  }));
+
+  return { visible, json: null, summary: formatSummary(visible, { ...o, chain }), cards, emits };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -372,7 +401,12 @@ Mau coba dulu tanpa key: tambahkan --demo (demo key publik, read-only, rate limi
         for (const card of out.cards) {
           if (await deliver(sinks, card) === 0) log("error", "kartu gagal terkirim ke semua sink");
         }
-        log("info", `${chain}: GMGN kirim ${result.scanned} token, ${out.visible.length} lolos filter, ${out.cards.length} kartu dikirim`);
+        let lp = 0;
+        for (const e of out.emits || []) {
+          if (emitLpCandidate(e.token, e.verdict, e.meta, o.lpInbox)) lp += 1;
+        }
+        log("info", `${chain}: GMGN kirim ${result.scanned} token, ${out.visible.length} lolos filter, `
+          + `${out.cards.length} kartu dikirim` + (o.lpInbox ? `, ${lp} diteruskan ke bot LP` : ""));
       }
     }
     pollState.persist(o.cooldown);

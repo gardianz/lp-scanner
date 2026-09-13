@@ -10,3 +10,6 @@ config.json
 
 # Setelan editor/agent lokal
 .claude/
+
+# Artefak WSL/Windows
+*:Zone.Identifier
